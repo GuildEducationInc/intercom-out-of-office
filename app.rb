@@ -61,7 +61,7 @@ def send_out_of_office_message (conversation_id)
   if DEBUG then
     puts "Sending out of office message!"
   end
-  admin_id = ENV["bot_admin_id"] 
+  admin_id = ENV["bot_admin_id"]
   message = ENV["message"] || "We are not available at the moment, we'll get back to you as soon as possible"
   init_intercom
   @intercom.conversations.reply(:id => conversation_id, :type => 'admin', :admin_id => admin_id, :message_type => 'comment', :body => message)
@@ -92,19 +92,13 @@ def already_sent_message_in_past_24_hours (conversation_id)
   return false
 end
 
-def is_office_hours  
-  timezone_string = ENV["timezone"] 
-  days_of_work = ENV["days_of_work"] # Sunday to Saturday "0111110" 
-  time_start = ENV["time_start"] # 24 hour time
-  time_stop = ENV["time_stop"]   # 24 hour time
-
+def is_office_hours
+  timezone_string = ENV["timezone"]
+  hours_hash = create_hours_hash
   current_time = Time.now
   timezone = nil
-  days_of_work = days_of_work || "0111110"
-  time_start = time_start || 900
-  time_stop = time_stop || 1700
 
-  if not timezone_string.nil? and not timezone_string.empty? then
+  if not timezone_string.nil? and not timezone_string.empty?
     begin
       timezone = ActiveSupport::TimeZone[timezone_string]
     rescue
@@ -112,37 +106,45 @@ def is_office_hours
     end
   end
 
-  if timezone.nil? then
-    time = current_time.hour * 100 + current_time.min;
-    day = current_time.wday
+  if timezone.nil?
+    time = current_time.hour * 100 + current_time.min
+    day = current_time.strftime("%A").downcase
   else
-    current_time_in_timezone = timezone.at(current_time);
-    time = current_time_in_timezone.hour * 100 + current_time_in_timezone.min;
-    day = current_time.wday
-  end
-  while days_of_work.length < 7
-    days_of_work += "1"
+    current_time_in_timezone = timezone.at(current_time)
+    time = current_time_in_timezone.hour * 100 + current_time_in_timezone.min
+    day = current_time.strftime("%A").downcase
   end
 
-  if DEBUG then
+  todays_start = hours_hash[day][:time_start] || "900"
+  todays_end = hours_hash[day][:time_stop] || "2000"
+
+  if DEBUG
     puts "Current time: #{current_time}"
     puts "Timezone: #{timezone_string}"
     puts "Calculated Time: #{time}"
-    puts "     Start time: #{time_start.to_i}"
-    puts "      Stop time: #{time_stop.to_i}"
+    puts "     Start time: #{todays_start.to_i}"
+    puts "      Stop time: #{todays_end.to_i}"
   end
 
-  if time_start.nil? or time_stop.nil? then
-    puts "Yes because nothing defined"
-  else 
-    is_a_workday = (days_of_work[day] == "1")
-    is_office_hours = (is_a_workday && (time >= time_start.to_i && time <= time_stop.to_i))
-    if DEBUG then
-      puts "Office hours: #{is_office_hours} based on calculations"
-    end
-    return is_office_hours
+  is_office_hours = ((time >= todays_start.to_i && time <= todays_end.to_i))
+
+  if DEBUG then
+    puts "Office hours: #{is_office_hours} based on calculations"
   end
-  return true
+
+  is_office_hours
+end
+
+def create_hours_hash
+  {
+    "monday" => {time_start: ENV["mon_time_start"], time_stop: ENV["mon_time_stop"]},
+    "tuesday" => {time_start: ENV["tues_time_start"], time_stop: ENV["tues_time_stop"]},
+    "wednesday" => {time_start: ENV["wed_time_start"], time_stop: ENV["wed_time_stop"]},
+    "thursday" => {time_start: ENV["thurs_time_start"], time_stop: ENV["thurs_time_stop"]},
+    "friday" => {time_start: ENV["fri_time_start"], time_stop: ENV["fri_time_stop"]},
+    "saturday" => {time_start: ENV["sat_time_start"], time_stop: ENV["sat_time_stop"]},
+    "sunday" => {time_start: ENV["sun_time_start"], time_stop: ENV["sun_time_stop"]},
+  }
 end
 
 def verify_signature(payload_body)
